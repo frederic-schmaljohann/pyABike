@@ -1,4 +1,5 @@
 import datetime
+import re
 from suds import WebFault
 from suds.client import Client
 from suds.plugin import *
@@ -6,7 +7,7 @@ from suds.plugin import *
 
 class PyABike:
 	client = ''
-	def __init__(self):		
+	def __init__(self):
 		url = 'https://xml.dbcarsharing-buchung.de/hal2_cabserver/definitions/HAL2_CABSERVER_3.wsdl' # current api url
 		self.client = Client(url, faults=False)
 
@@ -17,8 +18,12 @@ class PyABike:
 		if user != '' and passwd != '':
 			self.customerData = self.client.factory.create('Type_CustomerData')
 			self.customerData.Password = passwd
-			self.customerData.Phone = user
-			
+
+			if re.match("^(\+49)|(0049)|(015)|(016)|(017)[0-9]+", user):
+				self.customerData.Phone = user
+			else:
+				self.customerData.Number = user
+
 			return True
 		elif hasattr(self, 'customerData'):
 			return True
@@ -49,8 +54,8 @@ class PyABike:
 		self.commonParams.UserData = userData
 		self.commonParams.LanguageUID = 1 #only option
 		self.commonParams.RequestTime = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-		self.commonParams.Version = 1 #only option		
-	
+		self.commonParams.Version = 1 #only option
+
 
 
 	#requires self.payment
@@ -84,7 +89,7 @@ class PyABike:
 	def buildPaymentByWire(self, iban = 0, bic = 0, bankcode = 0, accountNumber = 0):
 		self.payment = self.client.factory.create('Type_Payment')
 		self.payment.PaymentMethod = 'L'
-		
+
 		self.wire = self.client.factory.create('Type_BankAccount')
 		self.wire.IBAN			= iban
 		self.wire.BIC			= bic
@@ -95,17 +100,17 @@ class PyABike:
 	def buildPaymentByCreditCard(self, cardNumber, expirationDate):
 		self.payment = self.client.factory.create('Type_Payment')
 		self.payment.PaymentMethod = 'K'
-		
+
 		self.creditCard = self.client.factory.create('Type_Creditcard')
 		self.creditCard.CardNumber 		= cardNumber
 		self.creditCard.ExpirationDate 	= expirationDate
-		
+
 		self.payment.CreditCard = self.creditCard
 
 
 	def buildBounusCard(self, cardID, cardNumber, validDate, validDateFrom):
 		self.bonusCard = self.client.factory.create('Type_BounusCard')
-		
+
 		self.bonusCard.CardID = cardID
 		self.bonusCard.CardNumber = cardNumber
 		self.bonusCard.ValidDate = validDate
@@ -126,19 +131,19 @@ class PyABike:
 				self.damageData = self.client.factory.create('Type_DamageData')
 				self.damageData.Text		= text
 				self.damageData.BikeNumber	= bike
-				
+
 				return True
 			elif bike == 0 and locID != 0:
 				self.damageData = self.client.factory.create('Type_DamageData')
 				self.damageData.Text		= text
 				self.damageData.LocationUID	= locID
-				
+
 				return True
 			else:
 				raise Exception('BikeNumber oder LocationUID must be set')
 		else:
 			raise Exception('No damage description was given')
-		
+
 		return False
 
 
@@ -157,7 +162,7 @@ class PyABike:
 
 	#auth required
 	def getCustomerInfo(self, user = '', passwd = ''):
-		#CommonParams: 
+		#CommonParams:
 		#CustomerData:
 		if self.buildCustomerData(user, passwd):
 			try:
@@ -209,7 +214,7 @@ class PyABike:
 		#ReturnCode: https://xml.dbcarsharing-buchung.de/hal2_cabserver/:Type_BikeCode
 		#LocationUID: http://www.w3.org/2001/XMLSchema:int
 		#CustomerDataOptional: https://xml.dbcarsharing-buchung.de/hal2_cabserver/:Type_CustomerDataOptional
-		if user == '' and passwd == '':	
+		if user == '' and passwd == '':
 			self.customerData = ''
 		else:
 			self.buildCustomerData(user, passwd)
@@ -344,7 +349,7 @@ class PyABike:
 		#CustomerData: https://xml.dbcarsharing-buchung.de/hal2_cabserver/:Type_CustomerData
 		#TripLimits: https://xml.dbcarsharing-buchung.de/hal2_cabserver/:Type_TripLimits
 		self.buildTripLimits(firstEntry, entryCount, startTime, endTime)
-		
+
 		if self.buildCustomerData(user, passwd):
 			try:
 				self.requestResponse = getattr(self.client.service, 'CABSERVER.listCompletedTrips')(CommonParams = self.commonParams, CustomerData = self.customerData, TripLimits = self.tripLimits)
